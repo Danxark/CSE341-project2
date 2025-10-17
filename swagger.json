@@ -1,58 +1,59 @@
 {
-  "openapi": "3.0.0",
+  "swagger": "2.0",
   "info": {
-    "title": "CSE341 Project 2 API",
+    "title": "Project 2 CRUD API with Auth",
     "version": "1.0.0",
-    "description": "CRUD API with Authentication and JWT"
+    "description": "API documentation for Project 2 with JWT Authentication"
   },
-  "servers": [
-    {
-      "url": "https://cse341-project2-1-n6h8.onrender.com",
-      "description": "Deployed API on Render"
+  "host": "cse341-project2-1-n6h8.onrender.com",
+  "basePath": "/",
+  "schemes": ["https"],
+  "securityDefinitions": {
+    "bearerAuth": {
+      "type": "apiKey",
+      "name": "Authorization",
+      "in": "header",
+      "description": "Enter 'Bearer <token>'"
     }
-  ],
+  },
   "paths": {
     "/auth/register": {
       "post": {
-        "summary": "Register new user",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "username": { "type": "string" },
-                  "password": { "type": "string" },
-                  "email": { "type": "string" }
-                }
-              }
-            }
+        "summary": "Register a new user",
+        "consumes": ["application/json"],
+        "parameters": [{
+          "in": "body",
+          "name": "body",
+          "schema": {
+            "properties": {
+              "username": { "type": "string" },
+              "password": { "type": "string" },
+              "email": { "type": "string" }
+            },
+            "required": ["username", "password", "email"]
           }
-        },
+        }],
         "responses": {
           "201": { "description": "User created successfully" },
-          "400": { "description": "Username exists or invalid input" }
+          "400": { "description": "Invalid input or username exists" }
         }
       }
     },
     "/auth/login": {
       "post": {
         "summary": "Login user and get JWT token",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "username": { "type": "string" },
-                  "password": { "type": "string" }
-                }
-              }
-            }
+        "consumes": ["application/json"],
+        "parameters": [{
+          "in": "body",
+          "name": "body",
+          "schema": {
+            "properties": {
+              "username": { "type": "string" },
+              "password": { "type": "string" }
+            },
+            "required": ["username", "password"]
           }
-        },
+        }],
         "responses": {
           "200": { "description": "Login successful" },
           "400": { "description": "Invalid username or password" }
@@ -62,110 +63,33 @@
     "/products": {
       "get": {
         "summary": "Get all products",
-        "responses": {
-          "200": { "description": "List of products" }
-        }
+        "responses": { "200": { "description": "Success" } }
       },
       "post": {
-        "summary": "Create new product (Protected)",
         "security": [{ "bearerAuth": [] }],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "name": { "type": "string" },
-                  "price": { "type": "number" }
-                },
-                "required": ["name", "price"]
-              }
-            }
+        "summary": "Create a new product (protected)",
+        "consumes": ["application/json"],
+        "parameters": [{
+          "in": "body",
+          "name": "body",
+          "schema": {
+            "properties": {
+              "name": { "type": "string" },
+              "category": { "type": "string" },
+              "description": { "type": "string" },
+              "price": { "type": "number" },
+              "stock": { "type": "number" },
+              "brand": { "type": "string" },
+              "sku": { "type": "string" }
+            },
+            "required": ["name", "category", "price"]
           }
-        },
+        }],
         "responses": {
           "201": { "description": "Product created successfully" },
-          "400": { "description": "Invalid input" },
-          "401": { "description": "Unauthorized" }
-        }
-      }
-    },
-    "/products/{id}": {
-      "get": {
-        "summary": "Get product by ID",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": { "type": "string" }
-          }
-        ],
-        "responses": {
-          "200": { "description": "Product found" },
-          "404": { "description": "Product not found" }
-        }
-      },
-      "put": {
-        "summary": "Update product (Protected)",
-        "security": [{ "bearerAuth": [] }],
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": { "type": "string" }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "name": { "type": "string" },
-                  "price": { "type": "number" }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": { "description": "Product updated successfully" },
-          "404": { "description": "Product not found" },
-          "401": { "description": "Unauthorized" }
-        }
-      },
-      "delete": {
-        "summary": "Delete product (Protected)",
-        "security": [{ "bearerAuth": [] }],
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": { "type": "string" }
-          }
-        ],
-        "responses": {
-          "200": { "description": "Product deleted successfully" },
-          "404": { "description": "Product not found" },
           "401": { "description": "Unauthorized" }
         }
       }
     }
-  },
-  "components": {
-    "securitySchemes": {
-      "bearerAuth": {
-        "type": "apiKey",
-        "name": "Authorization",
-        "in": "header",
-        "description": "Enter 'Bearer <token>'"
-      }
-    }
-  },
-  "security": [{ "bearerAuth": [] }]
+  }
 }

@@ -2,48 +2,36 @@ require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const jwt = require('jsonwebtoken');
 const swaggerUi = require('swagger-ui-express');
 const swaggerDocument = require('./swagger.json');
-const jwt = require('jsonwebtoken');
 
-const app = express();
-app.use(express.json());
-app.use(cors());
-
-// Connect to MongoDB
-mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log('✅ Connected to MongoDB'))
-  .catch(err => console.error('❌ MongoDB connection error:', err));
-
-// Import models (lowercase file names)
+// Models
 const User = require('./models/user');
 const Product = require('./models/product');
 
-// Swagger docs
+const app = express();
+app.use(express.json());
+app.use(cors()); // allow all origins
+
+const PORT = process.env.PORT || 3000;
+
+// ✅ Swagger documentation route
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
-// Authentication Middleware
-function authenticateToken(req, res, next) {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-  if (!token) return res.sendStatus(401);
-
-  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
-    if (err) return res.sendStatus(403);
-    req.user = user;
-    next();
-  });
-}
+/* -------------------- AUTH ROUTES -------------------- */
 
 // Register
 app.post('/auth/register', async (req, res) => {
   try {
     const { username, password, email } = req.body;
     const existingUser = await User.findOne({ username });
-    if (existingUser) return res.status(400).json({ error: 'Username already exists' });
+    if (existingUser)
+      return res.status(400).json({ error: 'Username already exists' });
 
     const user = new User({ username, password, email });
     await user.save();
+
     res.status(201).json({ message: 'User created successfully' });
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -60,6 +48,7 @@ app.post('/auth/login', async (req, res) => {
     const isMatch = await user.comparePassword(password);
     if (!isMatch) return res.status(400).json({ error: 'Invalid username or password' });
 
+    // Generate JWT
     const token = jwt.sign(
       { id: user._id, username: user.username },
       process.env.JWT_SECRET,
@@ -72,10 +61,52 @@ app.post('/auth/login', async (req, res) => {
   }
 });
 
-// 🔒 Protected Route: Create Product
+// Middleware to protect routes
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  if (!token) return res.sendStatus(401);
+
+  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+    if (err) return res.sendStatus(403);
+    req.user = user;
+    next();
+  });
+}
+
+/* -------------------- USER ROUTES -------------------- */
+
+// Create User (Protected)
+app.post('/users', authenticateToken, async (req, res) => {
+  try {
+    const user = new User(req.body);
+    await user.save();
+    res.status(201).json(user);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Get All Users (Protected)
+app.get('/users', authenticateToken, async (req, res) => {
+  try {
+    const users = await User.find();
+    res.json(users);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* -------------------- PRODUCT ROUTES -------------------- */
+
+// Create Product (Protected)
 app.post('/products', authenticateToken, async (req, res) => {
   try {
-    const product = new Product(req.body);
+    const { name, category, description, price, stock, brand, sku } = req.body;
+    if (!name || !category || !price)
+      return res.status(400).json({ error: 'Name, category, and price are required.' });
+
+    const product = new Product({ name, category, description, price, stock, brand, sku });
     await product.save();
     res.status(201).json(product);
   } catch (err) {
@@ -83,7 +114,7 @@ app.post('/products', authenticateToken, async (req, res) => {
   }
 });
 
-// Public Routes
+// Get All Products (Public)
 app.get('/products', async (req, res) => {
   try {
     const products = await Product.find();
@@ -93,19 +124,13 @@ app.get('/products', async (req, res) => {
   }
 });
 
-app.get('/products/:id', async (req, res) => {
-  try {
-    const product = await Product.findById(req.params.id);
-    if (!product) return res.status(404).json({ error: 'Product not found' });
-    res.json(product);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
+// Update Product (Protected)
 app.put('/products/:id', authenticateToken, async (req, res) => {
   try {
-    const product = await Product.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const product = await Product.findByIdAndUpdate(req.params.id, req.body, {
+      new: true,
+      runValidators: true
+    });
     if (!product) return res.status(404).json({ error: 'Product not found' });
     res.json(product);
   } catch (err) {
@@ -113,21 +138,21 @@ app.put('/products/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// Delete Product (Protected)
 app.delete('/products/:id', authenticateToken, async (req, res) => {
   try {
     const product = await Product.findByIdAndDelete(req.params.id);
     if (!product) return res.status(404).json({ error: 'Product not found' });
-    res.json({ message: 'Product deleted successfully' });
+    res.json({ message: 'Product deleted' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Default Route
-app.get('/', (req, res) => {
-  res.send('🚀 API is running!');
-});
+/* -------------------- SERVER -------------------- */
+mongoose
+  .connect(process.env.MONGODB_URI)
+  .then(() => console.log('✅ Connected to MongoDB'))
+  .catch((err) => console.error('❌ MongoDB connection error:', err));
 
-// Start server
-const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
