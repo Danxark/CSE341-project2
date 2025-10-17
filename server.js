@@ -1,18 +1,22 @@
 require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
+const swaggerUi = require('swagger-ui-express');
+const swaggerDocument = require('./swagger.json'); // make sure swagger.json is in your project root
 
 const app = express();
 app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 
-// Models
+// ----------------- SWAGGER -----------------
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+
+// ----------------- MODELS -----------------
 const User = require('./models/user');
 const Product = require('./models/product');
 
 // ----------------- USER ROUTES -----------------
-
 // Create User
 app.post('/users', async (req, res) => {
   try {
@@ -57,7 +61,6 @@ app.delete('/users/:id', async (req, res) => {
 });
 
 // ----------------- PRODUCT ROUTES -----------------
-
 // Create Product
 app.post('/products', async (req, res) => {
   try {
