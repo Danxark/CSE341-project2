@@ -1,9 +1,10 @@
 require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
-const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
+const swaggerUi = require('swagger-ui-express');
+const swaggerDocument = require('./swagger.json'); // your swagger file
 
 const app = express();
 app.use(express.json());
@@ -21,13 +22,10 @@ const Product = require('./models/product');
 app.post('/auth/register', async (req, res) => {
   try {
     const { username, password, email } = req.body;
-
     const existingUser = await User.findOne({ username });
     if (existingUser) return res.status(400).json({ error: 'Username already exists' });
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    const user = new User({ username, password: hashedPassword, email });
+    const user = new User({ username, password, email });
     await user.save();
 
     res.status(201).json({ message: 'User created successfully' });
@@ -43,10 +41,14 @@ app.post('/auth/login', async (req, res) => {
     const user = await User.findOne({ username });
     if (!user) return res.status(400).json({ error: 'Invalid username or password' });
 
-    const isMatch = await bcrypt.compare(password, user.password);
+    const isMatch = await user.comparePassword(password);
     if (!isMatch) return res.status(400).json({ error: 'Invalid username or password' });
 
-    const token = jwt.sign({ id: user._id, username: user.username }, process.env.JWT_SECRET, { expiresIn: '1h' });
+    const token = jwt.sign(
+      { id: user._id, username: user.username },
+      process.env.JWT_SECRET,
+      { expiresIn: '1h' }
+    );
 
     res.json({ message: 'Login successful', token });
   } catch (err) {
@@ -69,8 +71,8 @@ function authenticateToken(req, res, next) {
 
 // ----------------- USER ROUTES -----------------
 
-// Create User (protected)
-app.post('/users', authenticateToken, async (req, res) => {
+// Create User
+app.post('/users', async (req, res) => {
   try {
     const user = new User(req.body);
     await user.save();
@@ -80,8 +82,8 @@ app.post('/users', authenticateToken, async (req, res) => {
   }
 });
 
-// Get All Users (protected)
-app.get('/users', authenticateToken, async (req, res) => {
+// Get All Users
+app.get('/users', async (req, res) => {
   try {
     const users = await User.find();
     res.json(users);
@@ -90,8 +92,8 @@ app.get('/users', authenticateToken, async (req, res) => {
   }
 });
 
-// Update User (protected)
-app.put('/users/:id', authenticateToken, async (req, res) => {
+// Update User
+app.put('/users/:id', async (req, res) => {
   try {
     const user = await User.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
     if (!user) return res.status(404).json({ error: 'User not found' });
@@ -101,8 +103,8 @@ app.put('/users/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// Delete User (protected)
-app.delete('/users/:id', authenticateToken, async (req, res) => {
+// Delete User
+app.delete('/users/:id', async (req, res) => {
   try {
     const user = await User.findByIdAndDelete(req.params.id);
     if (!user) return res.status(404).json({ error: 'User not found' });
@@ -114,7 +116,7 @@ app.delete('/users/:id', authenticateToken, async (req, res) => {
 
 // ----------------- PRODUCT ROUTES -----------------
 
-// Create Product (protected)
+// Create Product (Protected)
 app.post('/products', authenticateToken, async (req, res) => {
   try {
     const product = new Product(req.body);
@@ -125,7 +127,7 @@ app.post('/products', authenticateToken, async (req, res) => {
   }
 });
 
-// Get All Products (public)
+// Get All Products
 app.get('/products', async (req, res) => {
   try {
     const products = await Product.find();
@@ -135,7 +137,7 @@ app.get('/products', async (req, res) => {
   }
 });
 
-// Update Product (protected)
+// Update Product (Protected)
 app.put('/products/:id', authenticateToken, async (req, res) => {
   try {
     const product = await Product.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
@@ -146,7 +148,7 @@ app.put('/products/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// Delete Product (protected)
+// Delete Product (Protected)
 app.delete('/products/:id', authenticateToken, async (req, res) => {
   try {
     const product = await Product.findByIdAndDelete(req.params.id);
@@ -156,6 +158,9 @@ app.delete('/products/:id', authenticateToken, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// ----------------- SWAGGER -----------------
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 // ----------------- SERVER -----------------
 mongoose.connect(process.env.MONGODB_URI)
