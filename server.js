@@ -1,20 +1,22 @@
 require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
+const cors = require('cors'); // <-- added
 const swaggerUi = require('swagger-ui-express');
-const swaggerDocument = require('./swagger.json'); // make sure swagger.json is in your project root
+const swaggerDocument = require('./swagger.json'); // make sure this file exists
 
 const app = express();
 app.use(express.json());
+app.use(cors()); // <-- enable CORS
 
 const PORT = process.env.PORT || 3000;
 
-// ----------------- SWAGGER -----------------
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
-
-// ----------------- MODELS -----------------
+// Models
 const User = require('./models/user');
 const Product = require('./models/product');
+
+// ----------------- SWAGGER -----------------
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 // ----------------- USER ROUTES -----------------
 // Create User
