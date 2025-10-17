@@ -2,31 +2,38 @@ require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
-const jwt = require('jsonwebtoken');
 const swaggerUi = require('swagger-ui-express');
 const swaggerDocument = require('./swagger.json');
-const User = require('./models/User');
-const Product = require('./models/Product');
+const jwt = require('jsonwebtoken');
 
 const app = express();
 app.use(express.json());
+app.use(cors());
 
-// ✅ CORS Configuration
-app.use(cors({
-  origin: '*', // allow all origins
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
-
-// ✅ Swagger Setup
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
-
-// ✅ MongoDB Connection
+// Connect to MongoDB
 mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log('✅ MongoDB connected'))
+  .then(() => console.log('✅ Connected to MongoDB'))
   .catch(err => console.error('❌ MongoDB connection error:', err));
 
-/* ------------------------ AUTH ROUTES ------------------------ */
+// Import models (lowercase file names)
+const User = require('./models/user');
+const Product = require('./models/product');
+
+// Swagger docs
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+
+// Authentication Middleware
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  if (!token) return res.sendStatus(401);
+
+  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+    if (err) return res.sendStatus(403);
+    req.user = user;
+    next();
+  });
+}
 
 // Register
 app.post('/auth/register', async (req, res) => {
@@ -53,7 +60,6 @@ app.post('/auth/login', async (req, res) => {
     const isMatch = await user.comparePassword(password);
     if (!isMatch) return res.status(400).json({ error: 'Invalid username or password' });
 
-    // ✅ Generate JWT token
     const token = jwt.sign(
       { id: user._id, username: user.username },
       process.env.JWT_SECRET,
@@ -66,23 +72,7 @@ app.post('/auth/login', async (req, res) => {
   }
 });
 
-/* ------------------------ AUTH MIDDLEWARE ------------------------ */
-
-function authenticateToken(req, res, next) {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
-  if (!token) return res.status(401).json({ error: 'Access denied. No token provided.' });
-
-  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
-    if (err) return res.status(403).json({ error: 'Invalid token.' });
-    req.user = user;
-    next();
-  });
-}
-
-/* ------------------------ PROTECTED ROUTES ------------------------ */
-
-// Create Product (Protected)
+// 🔒 Protected Route: Create Product
 app.post('/products', authenticateToken, async (req, res) => {
   try {
     const product = new Product(req.body);
@@ -93,7 +83,7 @@ app.post('/products', authenticateToken, async (req, res) => {
   }
 });
 
-// Get All Products (Public)
+// Public Routes
 app.get('/products', async (req, res) => {
   try {
     const products = await Product.find();
@@ -103,13 +93,41 @@ app.get('/products', async (req, res) => {
   }
 });
 
-/* ------------------------ DEFAULT ROUTE ------------------------ */
-
-app.get('/', (req, res) => {
-  res.send('✅ API is running successfully');
+app.get('/products/:id', async (req, res) => {
+  try {
+    const product = await Product.findById(req.params.id);
+    if (!product) return res.status(404).json({ error: 'Product not found' });
+    res.json(product);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-/* ------------------------ SERVER START ------------------------ */
+app.put('/products/:id', authenticateToken, async (req, res) => {
+  try {
+    const product = await Product.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    if (!product) return res.status(404).json({ error: 'Product not found' });
+    res.json(product);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
 
+app.delete('/products/:id', authenticateToken, async (req, res) => {
+  try {
+    const product = await Product.findByIdAndDelete(req.params.id);
+    if (!product) return res.status(404).json({ error: 'Product not found' });
+    res.json({ message: 'Product deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Default Route
+app.get('/', (req, res) => {
+  res.send('🚀 API is running!');
+});
+
+// Start server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
