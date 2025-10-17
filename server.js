@@ -7,9 +7,9 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 
-// Models (updated for modules folder)
-const User = require('./modules/user');
-const Product = require('./modules/product');
+// Models
+const User = require('./models/user');
+const Product = require('./models/product');
 
 // ----------------- USER ROUTES -----------------
 
