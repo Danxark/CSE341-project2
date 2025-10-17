@@ -1,28 +1,31 @@
-require('dotenv').config();
+if (process.env.NODE_ENV !== 'production') {
+  require('dotenv').config(); // Load .env only in development
+}
+
 const express = require('express');
 const mongoose = require('mongoose');
-const jwt = require('jsonwebtoken');
 const cors = require('cors');
+const jwt = require('jsonwebtoken');
 const swaggerUi = require('swagger-ui-express');
-const swaggerDocument = require('./swagger.json'); // your swagger file
+const swaggerDocument = require('./swagger.json'); // Make sure this exists
+const User = require('./models/user'); // lowercase filenames
+const Product = require('./models/product');
 
-const app = express();
-app.use(express.json());
-app.use(cors());
-
-const PORT = process.env.PORT || 3000;
-const JWT_SECRET = process.env.JWT_SECRET;
-
-if (!JWT_SECRET) {
-  console.error('❌ JWT_SECRET is missing in .env');
+// -------------------- ENV CHECK --------------------
+if (!process.env.JWT_SECRET) {
+  console.error('❌ JWT_SECRET is missing!');
   process.exit(1);
 }
 
-// Models
-const User = require('./models/user');
-const Product = require('./models/product');
+// -------------------- APP SETUP --------------------
+const app = express();
+app.use(cors()); // Allow all origins
+app.use(express.json());
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
-// ----------------- AUTHENTICATION -----------------
+const PORT = process.env.PORT || 3000;
+
+// -------------------- AUTH ROUTES --------------------
 
 // Register
 app.post('/auth/register', async (req, res) => {
@@ -50,7 +53,8 @@ app.post('/auth/login', async (req, res) => {
     const isMatch = await user.comparePassword(password);
     if (!isMatch) return res.status(400).json({ error: 'Invalid username or password' });
 
-    const token = jwt.sign({ id: user._id, username: user.username }, JWT_SECRET, { expiresIn: '1h' });
+    // generate JWT
+    const token = jwt.sign({ id: user._id, username: user.username }, process.env.JWT_SECRET, { expiresIn: '1h' });
 
     res.json({ message: 'Login successful', token });
   } catch (err) {
@@ -58,23 +62,23 @@ app.post('/auth/login', async (req, res) => {
   }
 });
 
-// Middleware to protect routes
+// -------------------- JWT MIDDLEWARE --------------------
 function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
   if (!token) return res.sendStatus(401);
 
-  jwt.verify(token, JWT_SECRET, (err, user) => {
+  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
     if (err) return res.sendStatus(403);
     req.user = user;
     next();
   });
 }
 
-// ----------------- USER ROUTES -----------------
+// -------------------- USER ROUTES --------------------
 
-// Create User (Protected)
-app.post('/users', authenticateToken, async (req, res) => {
+// Create User
+app.post('/users', async (req, res) => {
   try {
     const user = new User(req.body);
     await user.save();
@@ -116,7 +120,7 @@ app.delete('/users/:id', async (req, res) => {
   }
 });
 
-// ----------------- PRODUCT ROUTES -----------------
+// -------------------- PRODUCT ROUTES --------------------
 
 // Create Product (Protected)
 app.post('/products', authenticateToken, async (req, res) => {
@@ -139,8 +143,8 @@ app.get('/products', async (req, res) => {
   }
 });
 
-// Update Product
-app.put('/products/:id', async (req, res) => {
+// Update Product (Protected)
+app.put('/products/:id', authenticateToken, async (req, res) => {
   try {
     const product = await Product.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
     if (!product) return res.status(404).json({ error: 'Product not found' });
@@ -150,8 +154,8 @@ app.put('/products/:id', async (req, res) => {
   }
 });
 
-// Delete Product
-app.delete('/products/:id', async (req, res) => {
+// Delete Product (Protected)
+app.delete('/products/:id', authenticateToken, async (req, res) => {
   try {
     const product = await Product.findByIdAndDelete(req.params.id);
     if (!product) return res.status(404).json({ error: 'Product not found' });
@@ -161,10 +165,7 @@ app.delete('/products/:id', async (req, res) => {
   }
 });
 
-// ----------------- SWAGGER -----------------
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
-
-// ----------------- SERVER -----------------
+// -------------------- SERVER --------------------
 mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log('✅ Connected to MongoDB'))
   .catch(err => console.error('❌ MongoDB connection error:', err));
