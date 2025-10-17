@@ -3,23 +3,28 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
-const swaggerUi = require('swagger-ui-express');
-const swaggerDocument = require('./swagger.json'); // make sure this file exists
 
-const User = require('./models/user'); // lowercase matches your files
+// Models
+const User = require('./models/user');
 const Product = require('./models/product');
 
 const app = express();
-app.use(cors());
 app.use(express.json());
+
+// ----------------- CORS -----------------
+// Allow all origins (for testing)
+app.use(cors());
+
+// Optional: allow credentials and specific methods
+app.use(cors({
+  origin: '*', // or your frontend URL
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 
 const PORT = process.env.PORT || 3000;
 
-// ----------------- SWAGGER -----------------
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
-
-// ----------------- AUTH -----------------
-
+// ----------------- AUTH ROUTES -----------------
 // Register
 app.post('/auth/register', async (req, res) => {
   try {
@@ -69,7 +74,6 @@ function authenticateToken(req, res, next) {
 }
 
 // ----------------- USER ROUTES -----------------
-
 // Create User
 app.post('/users', async (req, res) => {
   try {
@@ -92,7 +96,7 @@ app.get('/users', async (req, res) => {
 });
 
 // Update User
-app.put('/users/:id', authenticateToken, async (req, res) => {
+app.put('/users/:id', async (req, res) => {
   try {
     const user = await User.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
     if (!user) return res.status(404).json({ error: 'User not found' });
@@ -103,7 +107,7 @@ app.put('/users/:id', authenticateToken, async (req, res) => {
 });
 
 // Delete User
-app.delete('/users/:id', authenticateToken, async (req, res) => {
+app.delete('/users/:id', async (req, res) => {
   try {
     const user = await User.findByIdAndDelete(req.params.id);
     if (!user) return res.status(404).json({ error: 'User not found' });
@@ -114,7 +118,6 @@ app.delete('/users/:id', authenticateToken, async (req, res) => {
 });
 
 // ----------------- PRODUCT ROUTES -----------------
-
 // Create Product (Protected)
 app.post('/products', authenticateToken, async (req, res) => {
   try {
@@ -158,12 +161,12 @@ app.delete('/products/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// ----------------- SERVER -----------------
-if (!process.env.JWT_SECRET) {
-  console.error('❌ JWT_SECRET is missing!');
-  process.exit(1);
-}
+// ----------------- SWAGGER -----------------
+const swaggerUi = require('swagger-ui-express');
+const swaggerDocument = require('./swagger.json'); // make sure this exists
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
+// ----------------- SERVER -----------------
 mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log('✅ Connected to MongoDB'))
   .catch(err => console.error('❌ MongoDB connection error:', err));
