@@ -1,31 +1,24 @@
-if (process.env.NODE_ENV !== 'production') {
-  require('dotenv').config(); // Load .env only in development
-}
-
+require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const swaggerUi = require('swagger-ui-express');
-const swaggerDocument = require('./swagger.json'); // Make sure this exists
-const User = require('./models/user'); // lowercase filenames
+const swaggerDocument = require('./swagger.json'); // make sure this file exists
+
+const User = require('./models/user'); // lowercase matches your files
 const Product = require('./models/product');
 
-// -------------------- ENV CHECK --------------------
-if (!process.env.JWT_SECRET) {
-  console.error('❌ JWT_SECRET is missing!');
-  process.exit(1);
-}
-
-// -------------------- APP SETUP --------------------
 const app = express();
-app.use(cors()); // Allow all origins
+app.use(cors());
 app.use(express.json());
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 const PORT = process.env.PORT || 3000;
 
-// -------------------- AUTH ROUTES --------------------
+// ----------------- SWAGGER -----------------
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+
+// ----------------- AUTH -----------------
 
 // Register
 app.post('/auth/register', async (req, res) => {
@@ -62,7 +55,7 @@ app.post('/auth/login', async (req, res) => {
   }
 });
 
-// -------------------- JWT MIDDLEWARE --------------------
+// Middleware to protect routes
 function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
@@ -75,7 +68,7 @@ function authenticateToken(req, res, next) {
   });
 }
 
-// -------------------- USER ROUTES --------------------
+// ----------------- USER ROUTES -----------------
 
 // Create User
 app.post('/users', async (req, res) => {
@@ -99,7 +92,7 @@ app.get('/users', async (req, res) => {
 });
 
 // Update User
-app.put('/users/:id', async (req, res) => {
+app.put('/users/:id', authenticateToken, async (req, res) => {
   try {
     const user = await User.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
     if (!user) return res.status(404).json({ error: 'User not found' });
@@ -110,7 +103,7 @@ app.put('/users/:id', async (req, res) => {
 });
 
 // Delete User
-app.delete('/users/:id', async (req, res) => {
+app.delete('/users/:id', authenticateToken, async (req, res) => {
   try {
     const user = await User.findByIdAndDelete(req.params.id);
     if (!user) return res.status(404).json({ error: 'User not found' });
@@ -120,7 +113,7 @@ app.delete('/users/:id', async (req, res) => {
   }
 });
 
-// -------------------- PRODUCT ROUTES --------------------
+// ----------------- PRODUCT ROUTES -----------------
 
 // Create Product (Protected)
 app.post('/products', authenticateToken, async (req, res) => {
@@ -165,7 +158,12 @@ app.delete('/products/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// -------------------- SERVER --------------------
+// ----------------- SERVER -----------------
+if (!process.env.JWT_SECRET) {
+  console.error('❌ JWT_SECRET is missing!');
+  process.exit(1);
+}
+
 mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log('✅ Connected to MongoDB'))
   .catch(err => console.error('❌ MongoDB connection error:', err));
